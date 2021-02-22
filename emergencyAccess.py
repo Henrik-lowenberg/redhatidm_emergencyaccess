@@ -27,14 +27,21 @@ def main(argv):
     for opt, arg in opts:
  
      if opt == '-h':
-       print ('emergencyAccess.py -u <username> -s <serverlist,commaseparated>')
+       print ('emergencyAccess.py -u username -s server1.example.com,server2.example.com')
        sys.exit(3)
      elif opt in ("-u", "--user"):
        user = arg
+    #   print (user)
      elif opt in ("-s", "--servers"):
        servers = arg
+       if ',' in servers:
+         # split string to tuple, separate on comma 2 handle multiple servers
+         res = tuple(servers.split(","))
+         servers = res
+         #print res
+ 
   except getopt.GetoptError:
-    print ('emergencyAccess.py -u <username> -s <serverlist,commaseparated>')
+    print ('emergencyAccess.py -u username -s server1.example.com,server2.example.com')
     sys.exit(2)
  
   # get date, format 20210101
