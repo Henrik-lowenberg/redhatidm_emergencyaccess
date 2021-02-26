@@ -5,8 +5,7 @@
 # https://python-freeipa.readthedocs.io/en/latest/
 #
 # How-to install python-freeipa:
-# export https_proxy=3D'SDS\firstname.lastname':yourpwd@httpwebpxgot.it.hcl=
-gss.com:8080
+# export https_proxy='SDS\firstname.lastname':yourpwd@httpwebpxgot.it.hclgss.com:8080
 # pip install python-freeipa
 #
 # Import the freeipa library
@@ -22,135 +21,122 @@ import sys, getopt
 # import regular expressions
 import re
 
-#posixgroup_cn =3D ""
+#posixgroup_cn = ""
 
 def main(argv):
   """
   Main function for starting methods
   """
-  user =3D None
-  servers =3D None
-  posixgroup_cn =3D ""
-  extuser1 =3D None
-  extuser2 =3D None
+  user = None
+  servers = None
+  posixgroup_cn = ""
+  extuser1 = None
+  extuser2 = None
 
   try:
-    opts, args =3D getopt.getopt(argv,"hu:s:",["user=3D","servers=3D"])
+    opts, args = getopt.getopt(argv,"hu:s:",["user=","servers="])
     for opt, arg in opts:
 
-     if opt =3D=3D '-h':
-       print ('emergencyAccess.py -u username -s server1.example.com,server=
-2.example.com')
+     if opt == '-h':
+       print ('emergencyAccess.py -u username -s server1.example.com,server2.example.com')
        sys.exit(3)
      elif opt in ("-u", "--user"):
-       user =3D arg
+       user = arg
     #   print (user)
      elif opt in ("-s", "--servers"):
-       servers =3D arg
+       servers = arg
        if ',' in servers:
-         # split string to tuple, separate on comma 2 handle multiple serve=
-rs
-         res =3D tuple(servers.split(","))
-         servers =3D res
+         # split string to tuple, separate on comma 2 handle multiple servers
+         res = tuple(servers.split(","))
+         servers = res
          #print res
 
     #   print (servers)
   except getopt.GetoptError:
-    print ('emergencyAccess.py -u username -s server1.example.com,server2.e=
-xample.com')
+    print ('emergencyAccess.py -u username -s server1.example.com,server2.example.com')
     sys.exit(2)
 
   # get date, format 20210101
-  now =3D datetime.now() # current date and time
-  todaysdate =3D now.strftime("%Y%m%d")
+  now = datetime.now() # current date and time
+  todaysdate = now.strftime("%Y%m%d")
 
   # get login credentials
-  client =3D ClientMeta("segotl6204.idm.it.hclgss.com")
+  client = ClientMeta("segotl6204.idm.it.hclgss.com")
   client.login("admin","idmhcl123")
 
 # testing regular expressions to identify AD account
   # search for @sds.hclgss.com or similar
   if re.search("\@[a-z]{3,9}\.[a-z]{3,9}\.[a-z]{3,9}", user):
-    extuser1 =3D user
+    extuser1 = user
   # search for SDS\ or similar with raw to include backslash
   elif re.search(r"[A-Z]{3,5}\\", user):
-    extuser2 =3D user
+    extuser2 = user
 
   print "In Main..."
   if extuser1: print "extuser1: " + extuser1
   if extuser2: print "extuser2: " + extuser2
 
   if extuser1: # split on @, return left side
-    tmpfriendlyUserName =3D extuser1.split("@", 1)
-    friendlyUserName =3D tmpfriendlyUserName[0]
-    extuser =3D extuser1
+    tmpfriendlyUserName = extuser1.split("@", 1)
+    friendlyUserName = tmpfriendlyUserName[0]
+    extuser = extuser1
   elif extuser2: # split on \, return right side
-    tmpfriendlyUserName =3D extuser2.split("\\", 1)
-    friendlyUserName =3D tmpfriendlyUserName[1]
-    extuser =3D extuser2
+    tmpfriendlyUserName = extuser2.split("\\", 1)
+    friendlyUserName = tmpfriendlyUserName[1]
+    extuser = extuser2
 
 
   def groupadd(friendlyUserName):
     print "In groupadd()"
-    posixgroup_cn =3D "unix_emerg_" + friendlyUserName + "_" + todaysdate +=
- "_user"
-    externalgroup_cn =3D "unix_emerg_" + friendlyUserName + "_" + todaysdat=
-e + "_user_ad"
+    posixgroup_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_user"
+    externalgroup_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_user_ad"
     client.group_add(posixgroup_cn)
-    client.group_add(externalgroup_cn, external=3DTrue)
-    client.group_add_member(posixgroup_cn,group=3Dexternalgroup_cn)
-    client.group_add_member(externalgroup_cn,ipaexternalmember=3Dextuser)
+    client.group_add(externalgroup_cn, external=True)
+    client.group_add_member(posixgroup_cn,group=externalgroup_cn)
+    client.group_add_member(externalgroup_cn,ipaexternalmember=extuser)
     return posixgroup_cn
 
 
   def sudoruleadd(user,servers,posixgroup_cn):
     print "In sudoruleadd()"
     # define common name
-    emerg_sudoruleadd_cn =3D "unix_emerg_" + friendlyUserName + "_" + today=
-sdate + "_high_rule"
+    emerg_sudoruleadd_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_high_rule"
     # show rule if it exists
 #    print client.sudorule_show(emerg_sudoruleadd_cn)
 #    sys.exit()
     # add rule
-    client.sudorule_add(emerg_sudoruleadd_cn,"temporary emergency root acce=
-ss for " + user,o_cmdcategory=3D'all',o_ipasudorunasusercategory=3D'all')
+    client.sudorule_add(emerg_sudoruleadd_cn,"temporary emergency root access for " + user,o_cmdcategory='all',o_ipasudorunasusercategory='all')
     # add host(s) to rule
-    client.sudorule_add_host(emerg_sudoruleadd_cn,host=3Dservers)
+    client.sudorule_add_host(emerg_sudoruleadd_cn,host=servers)
     # add local IDM user to rule
-#    client.sudorule_add_user(emerg_sudoruleadd_cn,user=3Duser)
+#    client.sudorule_add_user(emerg_sudoruleadd_cn,user=user)
     if not extuser:
-      client.sudorule_add_user(emerg_sudoruleadd_cn,user=3Duser)
+      client.sudorule_add_user(emerg_sudoruleadd_cn,user=user)
       print "not extuser"
     elif extuser:
-      client.sudorule_add_user(emerg_sudoruleadd_cn,group=3Dposixgroup_cn)
+      client.sudorule_add_user(emerg_sudoruleadd_cn,group=posixgroup_cn)
       print "extuser true"
       print posixgroup_cn
 
     # add command to rule (need to exist already)
-#    client.sudorule_add_allow_command(emerg_sudoruleadd_cn,sudocmd=3D"sudo=
- su -")
+#    client.sudorule_add_allow_command(emerg_sudoruleadd_cn,sudocmd="sudo su -")
 
 
   def hbacruleadd(user,servers,posixgroup_cn):
     print "In hbacruleadd()"
     # define common name
-    emerg_hbacruleadd_cn =3D "allow_unix_emerg_" + friendlyUserName + "_" +=
- todaysdate + "_high_hbac"
-    hbac_descr =3D "temporary access for user ${user} to server(s): ${serve=
-rs}"
+    emerg_hbacruleadd_cn = "allow_unix_emerg_" + friendlyUserName + "_" + todaysdate + "_high_hbac"
+    hbac_descr = "temporary access for user ${user} to server(s): ${servers}"
     # add rule
     client.hbacrule_add(emerg_hbacruleadd_cn)
     # add hosts to rule
-    client.hbacrule_add_host(emerg_hbacruleadd_cn, host=3Dservers,all=3D'Tr=
-ue')
+    client.hbacrule_add_host(emerg_hbacruleadd_cn, host=servers,all='True')
     # add user to rule
     if not extuser:
-      client.hbacrule_add_user(emerg_hbacruleadd_cn, user=3Duser,all=3D'Tru=
-e')
+      client.hbacrule_add_user(emerg_hbacruleadd_cn, user=user,all='True')
       print "not extuser"
     elif extuser:
-      client.hbacrule_add_user(emerg_hbacruleadd_cn, group=3Dposixgroup_cn,=
-all=3D'True')
+      client.hbacrule_add_user(emerg_hbacruleadd_cn, group=posixgroup_cn,all='True')
       print "extuser true"
       print posixgroup_cn
 
@@ -159,13 +145,13 @@ all=3D'True')
   sudoruleadd(user,servers,posixgroup_cn)
   hbacruleadd(user,servers,posixgroup_cn)
 
-if __name__ =3D=3D "__main__":
+if __name__ == "__main__":
 #  print len(sys.argv)
-#  if len (sys.argv) !=3D 5 :
-#    print "Error!\nUsage: ./emergencyAccess.py -u username -s server1,serv=
-er2,server3"
+#  if len (sys.argv) != 5 :
+#    print "Error!\nUsage: ./emergencyAccess.py -u username -s server1,server2,server3"
 #    sys.exit (1)
 
   main(sys.argv[1:])
 
 # END OF SCRIPT #
+
