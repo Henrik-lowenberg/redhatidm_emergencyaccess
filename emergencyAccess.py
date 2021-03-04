@@ -34,10 +34,10 @@ def main(argv):
   removeRole = False
 
   # get login credentials
-  client = ClientMeta("idmreplica1.idm.example.com")
-  client.login("admin","changeme")
+  client = ClientMeta("segotl6204.idm.it.hclgss.com")
+  client.login("admin","idmhcl123")
 
-  if sys.argv[1] = '--remove':
+  if sys.argv[1] == '--remove':
     removeRole = True
 
   if not removeRole:
@@ -58,8 +58,8 @@ def main(argv):
          elif re.search(r"[A-Z]{3,5}\\", user):
            extuser2 = user
 
-         if extuser1: print "extuser1: " + extuser1
-         if extuser2: print "extuser2: " + extuser2
+         #if extuser1: print "extuser1: " + extuser1
+         #if extuser2: print "extuser2: " + extuser2
 
          if extuser1: # split on @, return left side
            tmpfriendlyUserName = extuser1.split("@", 1)
@@ -87,8 +87,7 @@ def main(argv):
   todaysdate = now.strftime("%Y%m%d")
 
 
-  def groupadd(friendlyUserName):
-    print "In groupadd()"
+  def groupadd(friendlyUserName): # Add user group
     posixgroup_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_user"
     externalgroup_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_user_ad"
     client.group_add(posixgroup_cn)
@@ -98,12 +97,11 @@ def main(argv):
     return posixgroup_cn
 
 
-  def sudoruleadd(user,servers,posixgroup_cn):
-    # print "In sudoruleadd()"
+  def sudoruleadd(user,servers,posixgroup_cn): # add sudorule
     # define common name
     emerg_sudoruleadd_cn = "unix_emerg_" + friendlyUserName + "_" + todaysdate + "_high_rule"
-    # show rule if it exists
-    # print client.sudorule_show(emerg_sudoruleadd_cn)
+    # show rule if it exists (skip procedure not yet created)
+#    print client.sudorule_show(emerg_sudoruleadd_cn)
     # add rule
     client.sudorule_add(emerg_sudoruleadd_cn,"temporary emergency root access for " + user,o_cmdcategory='all',o_ipasudorunasusercategory='all')
     # add host(s) to rule
@@ -111,78 +109,87 @@ def main(argv):
     # add local IDM user to rule
     if not extuser:
       client.sudorule_add_user(emerg_sudoruleadd_cn,user=user)
-    # print "not extuser"
+    # Or add user group for AD user
     elif extuser:
       client.sudorule_add_user(emerg_sudoruleadd_cn,group=posixgroup_cn)
-      # print "extuser true"
-      # print posixgroup_cn
-
-    # add command to rule (need to exist already)
-    # client.sudorule_add_allow_command(emerg_sudoruleadd_cn,sudocmd="sudo su -")
 
 
-  def hbacruleadd(user,servers,posixgroup_cn):
-    print "In hbacruleadd()"
+  def hbacruleadd(user,servers,posixgroup_cn): # add HBAC rule
     # define common name
     emerg_hbacruleadd_cn = "allow_unix_emerg_" + friendlyUserName + "_" + todaysdate + "_high_hbac"
+    # define description
     hbac_descr = "temporary access for user ${user} to server(s): ${servers}"
     # add rule
     client.hbacrule_add(emerg_hbacruleadd_cn)
     # add hosts to rule
     client.hbacrule_add_host(emerg_hbacruleadd_cn, host=servers,all='True')
-    # add user to rule
+    # add local IDM user to rule
     if not extuser:
       client.hbacrule_add_user(emerg_hbacruleadd_cn, user=user,all='True')
-      # print "not extuser"
+      # Or add group for AD user
     elif extuser:
       client.hbacrule_add_user(emerg_hbacruleadd_cn, group=posixgroup_cn,all='True')
-      # print "extuser true"
-      # print posixgroup_cn
 
 
-  def removeold():
+  def removeold(): # Remove all emergency groups/rules older than 3 days
     all_emerg_groups = client.group_find("emerg")
     all_emerg_sudorules = client.sudorule_find("emerg")
     all_emerg_hbacrules = client.hbacrule_find("emerg")
     right_now_3_days_ago = datetime.today() - timedelta(days=3)
 
     try:
+      # if groups found called emerg something
       if all_emerg_groups:
         #print all_emerg_groups['result'][1]['cn']
+        # loop through the group names
         for usergroup in all_emerg_groups['result'][1]['cn']:
+          # extract date from group name
           getTheDate = dparser.parse(usergroup, fuzzy=True)
           #print getTheDate
+          # is date older than 3 days: then action
           if getTheDate < right_now_3_days_ago:
             print "user group is older than 3 days"
+            # add group name to list
             groupRemovalList.append(usergroup)
+            # loop through list and delete group
             for group in groupRemovalList:
               client.group_del(group)
         print
 
-      if all_emerg_sudorules:
+      if all_emerg_sudorules: # if sudorules found called emerg something
         #print all_emerg_sudorules['result'][0]['cn']
+        # loop through the sudorule names
         for sudorule in all_emerg_sudorules['result'][0]['cn']:
+          # extract date from sudorule name
           getTheDate = dparser.parse(sudorule, fuzzy=True)
           #print getTheDate
+          # is date older than 3 days: then action
           if getTheDate < right_now_3_days_ago:
             print "sudo rule is older than 3 days"
+            # add sudorule name to list
             sudoruleRemovalList.append(sudorule)
+            # loop through list and delete sudorule
             for sudorule in sudoruleRemovalList:
               client.sudorule_del(sudorule)
         print
 
-      if all_emerg_hbacrules:
+      if all_emerg_hbacrules: # if hbacrules found called emerg something
         #print all_emerg_hbacrules['result'][0]['cn']
+        # loop through the hbacrule names
         for hbacrule in all_emerg_hbacrules['result'][0]['cn']:
+          # extract date from hbacrule name
           getTheDate = dparser.parse(hbacrule, fuzzy=True)
           #print getTheDate
+          # is date older than 3 days: then action
           if getTheDate < right_now_3_days_ago:
             print "hbac rule is older than 3 days"
+            # add hbacrule name to list
             hbacruleRemovalList.append(hbacrule)
+            # loop through list and delete hbacrule
             for hbacrule in hbacruleRemovalList:
               client.hbacrule_del(hbacrule)
         print
-    except NameError:
+    except NameError: # if one or more was not found
       print "some or no group/rules were not found..."
 
 
